@@ -213,7 +213,7 @@ private fun AddFriendDialog(
     onAdd: (name: String, path: String) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("~/projects/") }
+    var path by remember { mutableStateOf("~/") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -236,7 +236,7 @@ private fun AddFriendDialog(
                     value = path,
                     onValueChange = { path = it },
                     label = { Text("Project path") },
-                    placeholder = { Text("~/projects/my-agent") },
+                    placeholder = { Text("~/my-agent") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
