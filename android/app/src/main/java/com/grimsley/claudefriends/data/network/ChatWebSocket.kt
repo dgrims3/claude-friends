@@ -31,10 +31,12 @@ class ChatWebSocket(private val friendId: String, private val wsUrl: String) {
 
     fun connect() {
         val url = "$wsUrl/sessions/$friendId/ws"
+        android.util.Log.d("ClaudeFriends", "WebSocket connecting to: $url")
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                android.util.Log.d("ClaudeFriends", "WebSocket OPEN")
                 _isConnected = true
                 messageChannel.trySend(
                     ChatMessage(type = "system", content = "Connected")
@@ -53,6 +55,7 @@ class ChatWebSocket(private val friendId: String, private val wsUrl: String) {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                android.util.Log.e("ClaudeFriends", "WebSocket FAILURE: ${t.javaClass.name}: ${t.message}", t)
                 _isConnected = false
                 messageChannel.trySend(
                     ChatMessage(type = "error", content = "Connection lost: ${t.message}")

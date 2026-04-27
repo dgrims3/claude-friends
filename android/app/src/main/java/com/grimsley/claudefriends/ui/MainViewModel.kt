@@ -54,11 +54,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Settings
     // ──────────────────────────────────────────────
 
-    fun saveSettings(host: String, port: String) {
-        viewModelScope.launch {
-            settings.saveServer(host, port)
-            api.baseUrl = settings.getServerUrl()
-        }
+    suspend fun saveSettings(host: String, port: String) {
+        settings.saveServer(host, port)
+        api.baseUrl = settings.getServerUrl()
     }
 
     private suspend fun ensureApiUrl() {
@@ -127,9 +125,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 ensureApiUrl()
+                android.util.Log.d("ClaudeFriends", "baseUrl=${api.baseUrl}")
 
-                // Start the session on the server (creates claude process)
-                api.startSession(friend.id)
+                // Start the session on the server
+                android.util.Log.d("ClaudeFriends", "Starting session for ${friend.id}...")
+                val startResp = api.startSession(friend.id)
+                android.util.Log.d("ClaudeFriends", "startSession response: $startResp")
 
                 // Load any existing history
                 try {
@@ -140,27 +141,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Connect WebSocket
                 val wsUrl = settings.getWsUrl()
+                android.util.Log.d("ClaudeFriends", "Connecting WebSocket to $wsUrl")
                 val socket = ChatWebSocket(friend.id, wsUrl)
                 currentSocket = socket
 
                 // Collect incoming messages
                 launch {
                     socket.messages.collect { msg ->
-                        _messages.value = _messages.value + msg
-
-                        // Update connection state
+                        // Update connection/loading state from control events
                         when (msg.type) {
-                            "system" -> if (msg.content == "Connected") {
-                                _isConnected.value = true
-                                _isLoading.value = false
+                            "system" -> {
+                                if (msg.content == "Connected") {
+                                    _isConnected.value = true
+                                    _isLoading.value = false
+                                }
+                                // Don't display system init or "Connected" messages
                             }
-                            "error" -> _isConnected.value = false
+                            "error" -> {
+                                _isConnected.value = false
+                                _messages.value = _messages.value + msg
+                            }
                             "session_ended" -> {
                                 _isConnected.value = false
                                 _isLoading.value = false
+                                _messages.value = _messages.value + msg
                             }
-                            // When assistant responds, loading is done
-                            "assistant" -> _isLoading.value = false
+                            "assistant" -> {
+                                _isLoading.value = false
+                                _messages.value = _messages.value + msg
+                            }
+                            "user" -> {
+                                _messages.value = _messages.value + msg
+                            }
+                            "tool_use", "tool_result" -> {
+                                _messages.value = _messages.value + msg
+                            }
+                            "status" -> {
+                                // "thinking" / "ready" — drive loading indicator, don't display
+                                _isLoading.value = msg.content == "thinking"
+                            }
+                            // Suppress: stderr, raw, result, rate_limit_event, system init
                         }
                     }
                 }
@@ -168,21 +188,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 socket.connect()
 
             } catch (e: Exception) {
+                android.util.Log.e("ClaudeFriends", "connectToFriend failed", e)
                 _error.value = "Connection failed: ${e.message}"
                 _isLoading.value = false
             }
         }
     }
 
-    fun sendMessage(content: String) {
-        // Handle /quit command
-        if (content.trim() == "/quit") {
+    fun sendMessage(content: String): Boolean {
+        val trimmed = content.trim()
+        // Handle exit/quit commands — clear chat and signal caller to navigate back
+        if (trimmed == "/quit" || trimmed == "/exit") {
             currentSocket?.sendQuit()
-            return
+            disconnectChat()
+            return true // indicates "go back"
         }
 
         _isLoading.value = true
         currentSocket?.sendMessage(content)
+        return false
     }
 
     fun disconnectChat() {

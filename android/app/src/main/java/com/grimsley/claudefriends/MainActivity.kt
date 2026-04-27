@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
 
                 // Track selected friend for navigation
                 var selectedFriend by remember { mutableStateOf<Friend?>(null) }
+                val coroutineScope = rememberCoroutineScope()
 
                 // Show errors as snackbar
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -67,9 +69,11 @@ class MainActivity : ComponentActivity() {
                                 currentPort = serverPort,
                                 isFirstLaunch = !isConfigured,
                                 onSave = { host, port ->
-                                    viewModel.saveSettings(host, port)
-                                    navController.navigate("friends") {
-                                        popUpTo("settings") { inclusive = true }
+                                    coroutineScope.launch {
+                                        viewModel.saveSettings(host, port)
+                                        navController.navigate("friends") {
+                                            popUpTo("settings") { inclusive = true }
+                                        }
                                     }
                                 },
                                 onBack = if (isConfigured) {
@@ -110,7 +114,10 @@ class MainActivity : ComponentActivity() {
                                     messages = messages,
                                     isConnected = isConnected,
                                     isLoading = isLoading,
-                                    onSend = { viewModel.sendMessage(it) },
+                                    onSend = {
+                                        val shouldGoBack = viewModel.sendMessage(it)
+                                        if (shouldGoBack) navController.popBackStack()
+                                    },
                                     onBack = {
                                         navController.popBackStack()
                                     },

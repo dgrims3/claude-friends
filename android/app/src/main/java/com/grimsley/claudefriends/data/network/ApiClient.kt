@@ -51,12 +51,15 @@ class ApiClient(var baseUrl: String = "") {
         client.newCall(request).execute()
     }
 
-    suspend fun startSession(id: String) = withContext(Dispatchers.IO) {
+    suspend fun startSession(id: String): String = withContext(Dispatchers.IO) {
+        val url = "$baseUrl/sessions/$id/start"
         val request = Request.Builder()
-            .url("$baseUrl/sessions/$id/start")
+            .url(url)
             .post("".toRequestBody())
             .build()
-        client.newCall(request).execute()
+        val response = client.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        "HTTP ${response.code} from $url: $body"
     }
 
     suspend fun getHistory(id: String): String = withContext(Dispatchers.IO) {
